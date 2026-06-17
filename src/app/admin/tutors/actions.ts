@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 function str(formData: FormData, k: string) {
@@ -38,27 +39,63 @@ function tutorData(formData: FormData) {
     bankCode: str(formData, "bankCode"),
     bankAccount: str(formData, "bankAccount"),
     perLessonRate: rate !== null && !Number.isNaN(rate) ? rate : null,
-    isActive: formData.get("isActive") === "on",
   };
 }
 
-export async function createTutor(formData: FormData) {
+// 檢查電話是否已被其他用戶使用
+async function phoneTaken(phone: string, exceptId?: string) {
+  const dup = await prisma.user.findFirst({
+    where: { phone, ...(exceptId ? { id: { not: exceptId } } : {}) },
+    select: { id: true },
+  });
+  return !!dup;
+}
+
+export async function createTutor(
+  _prev: string | undefined,
+  formData: FormData
+): Promise<string | undefined> {
   const data = tutorData(formData);
-  if (!data.name) return;
-  await prisma.user.create({ data: { ...data, role: "TUTOR" } });
+  if (!data.name) return "請輸入導師姓名。";
+  if (data.phone && (await phoneTaken(data.phone))) {
+    return "此電話號碼已被其他用戶使用，不可重複。";
+  }
+  await prisma.user.create({ data: { ...data, role: "TUTOR", isActive: true } });
   revalidatePath("/admin/tutors");
   redirect("/admin/tutors");
 }
 
-export async function updateTutor(id: string, formData: FormData) {
+export async function updateTutor(
+  id: string,
+  _prev: string | undefined,
+  formData: FormData
+): Promise<string | undefined> {
   const data = tutorData(formData);
-  if (!data.name) return;
-  await prisma.user.update({ where: { id }, data });
+  if (!data.name) return "請輸入導師姓名。";
+  if (data.phone && (await phoneTaken(data.phone, id))) {
+    return "此電話號碼已被其他用戶使用，不可重複。";
+  }
+  await prisma.user.update({
+    where: { id },
+    data: { ...data, isActive: formData.get("isActive") === "on" },
+  });
   revalidatePath("/admin/tutors");
   redirect("/admin/tutors");
 }
 
-export async function toggleTutorActive(id: string, isActive: boolean) {
-  await prisma.user.update({ where: { id }, data: { isActive } });
+export async function deleteTutor(id: string) {
+  // 解除關聯後刪除：課堂設為空缺，打卡及工作確認書紀錄一併刪除
+  const nullTutor: Prisma.LessonUncheckedUpdateManyInput = { tutorId: null };
+  const nullSub: Prisma.LessonUncheckedUpdateManyInput = {
+    substituteTutorId: null,
+  };
+  await prisma.lesson.updateMany({ where: { tutorId: id }, data: nullTutor });
+  await prisma.lesson.updateMany({
+    where: { substituteTutorId: id },
+    data: nullSub,
+  });
+  await prisma.checkIn.deleteMany({ where: { tutorId: id } });
+  await prisma.jobConfirmation.deleteMany({ where: { tutorId: id } });
+  await prisma.user.delete({ where: { id } });
   revalidatePath("/admin/tutors");
 }

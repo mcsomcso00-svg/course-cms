@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useActionState } from "react";
 import type { User } from "@prisma/client";
 import DseInput from "./DseInput";
 
@@ -59,10 +62,14 @@ export default function TutorForm({
   tutor,
   title,
 }: {
-  action: (formData: FormData) => void;
+  action: (
+    prev: string | undefined,
+    formData: FormData
+  ) => Promise<string | undefined>;
   tutor?: User;
   title: string;
 }) {
+  const [error, formAction, pending] = useActionState(action, undefined);
   return (
     <div className="mx-auto max-w-3xl p-6">
       <div className="mb-5 flex items-center justify-between">
@@ -72,7 +79,7 @@ export default function TutorForm({
         </Link>
       </div>
 
-      <form action={action} className="space-y-5">
+      <form action={formAction} className="space-y-5">
         <Section title="基本資料">
           <F label="導師姓名" name="name" defaultValue={tutor?.name} required />
           <F label="編號" name="tutorNo" defaultValue={tutor?.tutorNo} />
@@ -128,12 +135,17 @@ export default function TutorForm({
           </label>
         </Section>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-3">
+          {error && <p className="mr-auto text-sm text-rose-600">{error}</p>}
           <Link href="/admin/tutors" className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100">
             取消
           </Link>
-          <button type="submit" className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
-            儲存
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+          >
+            {pending ? "儲存中…" : "儲存"}
           </button>
         </div>
       </form>

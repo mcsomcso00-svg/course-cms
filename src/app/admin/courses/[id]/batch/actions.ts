@@ -64,19 +64,42 @@ export async function createJobConfirmations(
   const fee = feeStr ? Number(feeStr) : null;
   const agreement = String(formData.get("jcAgreement") ?? "").trim() || null;
 
+  // 表單上選擇的導師（更換代課導師 → 代課欄；否則 → 導師欄）
+  const operation = String(formData.get("operation") ?? "");
+  const isSub = operation === "REPLACE_SUBSTITUTE";
+  const selectedTutorId =
+    (isSub
+      ? String(formData.get("substituteTutorId") ?? "")
+      : String(formData.get("tutorId") ?? "")
+    ).trim() || null;
+
   const course = await prisma.course.findUnique({ where: { id: courseId } });
   const lessons = await prisma.lesson.findMany({
     where: { id: { in: lessonIds }, group: { courseId } },
     select: { id: true, tutorId: true, substituteTutorId: true },
   });
+  const validIds = lessons.map((l) => l.id);
+  if (validIds.length === 0) return;
 
-  // 以實際任教者（代課優先）分組
+  // 製作 JC 同時套用導師指派（與「保存」一致），確保確認書有導師
+  if (selectedTutorId) {
+    const data: Prisma.LessonUncheckedUpdateManyInput = isSub
+      ? { substituteTutorId: selectedTutorId }
+      : { tutorId: selectedTutorId };
+    await prisma.lesson.updateMany({ where: { id: { in: validIds } }, data });
+  }
+
+  // 決定每張確認書的導師
   const byTutor = new Map<string, string[]>();
-  for (const l of lessons) {
-    const t = l.substituteTutorId ?? l.tutorId;
-    if (!t) continue;
-    if (!byTutor.has(t)) byTutor.set(t, []);
-    byTutor.get(t)!.push(l.id);
+  if (selectedTutorId) {
+    byTutor.set(selectedTutorId, validIds);
+  } else {
+    for (const l of lessons) {
+      const t = l.substituteTutorId ?? l.tutorId;
+      if (!t) continue;
+      if (!byTutor.has(t)) byTutor.set(t, []);
+      byTutor.get(t)!.push(l.id);
+    }
   }
 
   for (const [tutorId, ids] of byTutor) {

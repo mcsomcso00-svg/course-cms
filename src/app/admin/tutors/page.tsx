@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import ConfirmButton from "@/components/ConfirmButton";
+import { deleteTutor } from "./actions";
 
 const FIELDS: { key: string; label: string; col: keyof Prisma.UserWhereInput }[] = [
   { key: "tutorNo", label: "編號", col: "tutorNo" },
@@ -192,12 +194,21 @@ export default async function TutorsPage({
                     )}
                   </td>
                   <td className={td}>
-                    <Link
-                      href={`/admin/tutors/${t.id}/edit`}
-                      className="rounded-md border border-gray-300 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
-                    >
-                      編輯
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/admin/tutors/${t.id}/edit`}
+                        className="rounded-md border border-gray-300 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+                      >
+                        編輯
+                      </Link>
+                      <ConfirmButton
+                        action={deleteTutor.bind(null, t.id)}
+                        message={`確定刪除導師「${t.name}」？其課堂會設為空缺，打卡及工作確認書紀錄會一併刪除，且無法復原。`}
+                        className="rounded-md border border-rose-200 px-2 py-0.5 text-xs text-rose-600 hover:bg-rose-50"
+                      >
+                        刪除
+                      </ConfirmButton>
+                    </div>
                   </td>
                 </tr>
               ))
