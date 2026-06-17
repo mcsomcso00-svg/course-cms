@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
+
+export async function logout() {
+  await signOut({ redirectTo: "/login" });
+}
 
 // 新增學年：以開始年份計算，例如 2026 → "2026-2027"
 export async function createAcademicYear(formData: FormData) {
