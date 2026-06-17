@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: course-cms-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cms
+      POSTGRES_PASSWORD: cms_dev_password
+      POSTGRES_DB: course_cms
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

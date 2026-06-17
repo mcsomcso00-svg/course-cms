@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($tools = @{ \"Node.js\" = \"node\"; \"npm\" = \"npm\"; \"Git\" = \"git\"; \"Docker\" = \"docker\"; \"FFmpeg\" = \"ffmpeg\"; \"Python\" = \"python\"; \"VS Code\" = \"code\"; \"pnpm\" = \"pnpm\" }; foreach \\($name in $tools.Keys\\) { $cmd = Get-Command $tools[$name] -ErrorAction SilentlyContinue; if \\($cmd\\) { $v = \"\"; try { $v = & $tools[$name] --version 2>$null | Select-Object -First 1 } catch {}; Write-Output \"$name : INSTALLED \\($v\\)\" } else { Write-Output \"$name : NOT FOUND\" } })",
+      "PowerShell(winget install Docker.DockerDesktop --accept-source-agreements --accept-package-agreements --silent)",
+      "PowerShell(npm install next-auth@beta bcryptjs zod; \\(Get-Content package.json | ConvertFrom-Json\\).dependencies)",
+      "PowerShell(npm install -D tsx; $bytes = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Fill\\($bytes\\); [Convert]::ToBase64String\\($bytes\\))",
+      "PowerShell($rng = New-Object Security.Cryptography.RNGCryptoServiceProvider; $bytes = New-Object byte[] 32; $rng.GetBytes\\($bytes\\); [Convert]::ToBase64String\\($bytes\\))"
+    ]
+  }
+}

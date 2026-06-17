@@ -1,0 +1,319 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ===== 用戶（管理員 / 導師）=====
+
+enum Role {
+  ADMIN
+  TUTOR
+}
+
+model User {
+  id            String   @id @default(cuid())
+  // email / 密碼僅管理員需要；導師以電話 OTP 登入，可無 email
+  email         String?  @unique
+  passwordHash  String?
+  name          String
+  phone         String?
+  role          Role     @default(TUTOR)
+  // 導師每堂薪金（HKD）。代課時亦以代課導師本人的 rate 計算
+  perLessonRate Decimal? @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+
+  // ===== 導師檔案 =====
+  tutorNo     String? // 編號
+  region      String? // 地區
+  subjects    String? // 任教科目
+  scrcExpiry  DateTime? @db.Date // SCRC 到期
+  dseResult   String? // DSE 成績
+  education   String? // 最高學歷
+  experience  String? // 經驗
+  remarks     String? // 評語
+  gender      String? // 性別
+  dob         DateTime? @db.Date // 出生日期
+  hkid        String? // 身份證號碼（PDPO 敏感資料）
+  address     String? // 地址
+  payeeName   String? // 收款人名
+  bankCode    String? // 銀行編號
+  bankAccount String? // 銀行戶口
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lessonsAsTutor      Lesson[]          @relation("LessonTutor")
+  lessonsAsSubstitute Lesson[]          @relation("LessonSubstitute")
+  checkIns            CheckIn[]
+  jobConfirmations    JobConfirmation[]
+}
+
+// ===== 學年 =====
+
+model AcademicYear {
+  id        String   @id @default(cuid())
+  label     String   @unique // 例如 "2025-2026"
+  isHidden  Boolean  @default(false) // 隱藏年度
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  courses Course[]
+}
+
+// ===== 學校資訊 =====
+
+model School {
+  id            String   @id @default(cuid())
+  name          String
+  address       String? // 地址
+  phone         String? // 電話
+  fax           String? // 傳真
+  contactPerson String? // 學校負責人
+  contactPhone  String?
+  contactEmail  String?
+  notes         String? // 備註
+  // 打卡地理範圍
+  latitude      Decimal? @db.Decimal(9, 6)
+  longitude     Decimal? @db.Decimal(9, 6)
+  checkInRadius Int? // 打卡範圍（米）
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  courses Course[]
+}
+
+// ===== 手機驗證碼（導師打卡登入）=====
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
+// ===== 課程資訊 =====
+
+enum CourseStatus {
+  PLANNED // 計劃中
+  CONFIRMED // 已確認
+  ONGOING // 進行中
+  COMPLETED // 已完成
+  CANCELLED // 已取消
+}
+
+enum InvoiceStatus {
+  INCOMPLETE // 未完成
+  COMPLETE // 已完成
+}
+
+model Course {
+  id             String       @id @default(cuid())
+  academicYearId String
+  schoolId       String
+  name           String // 課程名稱
+  code           String?
+  status         CourseStatus @default(PLANNED)
+
+  // 費用 / Invoicing（含義待確認，見 PENDING_QUESTIONS.md）
+  feeNote       String?
+  invoiceStatus InvoiceStatus @default(INCOMPLETE)
+
+  // 導師要求
+  tutorYearsRequired     String? // 年資
+  tutorQualification     String? // 提堂(資格)
+  tutorOtherRequirements String? // 其他（性別、口齒、聲線、主修科目等）
+
+  // 課程要求
+  contentRequirement  String? // 內容（包括參校類葉）
+  materialRequirement String? // 物資要求
+  teachingLanguage    String? // 授課語言
+
+  notes        String? // 備註
+  workPlanNote String? // 工作計劃表備註（教材計劃等）
+  startDate    DateTime? @db.Date
+  endDate      DateTime? @db.Date
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  academicYear     AcademicYear      @relation(fields: [academicYearId], references: [id])
+  school           School            @relation(fields: [schoolId], references: [id])
+  groups           Group[]
+  materials        MaterialItem[]
+  jobConfirmations JobConfirmation[]
+
+  @@index([academicYearId, schoolId])
+}
+
+// ===== 小組（一個課程可有一或多個小組）=====
+
+model Group {
+  id               String   @id @default(cuid())
+  courseId         String
+  name             String // 例如 "A組"
+  studentGrades    String[] // 學生年級（可多選）
+  studentCount     Int? // 學生人數
+  classLocation    String? // 上堂地點
+  materialLocation String? // 物資擺放位置
+
+  // 時間表（每週固定時段，可多日；實際每堂日期見 Lesson）
+  daysOfWeek        Int[] // 星期 1=一 … 7=日（可多選）
+  startTime         String? // "09:20"
+  endTime           String? // "10:20"
+  budget            String? // 預算
+  requiresTA        Boolean @default(false) // 要求助教
+  requiresAssistant Boolean @default(false) // 要求助理
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@index([courseId])
+}
+
+// ===== 班 / 堂（每節課）=====
+
+enum LessonStatus {
+  SCHEDULED // 已編排
+  COMPLETED // 已完成
+  CANCELLED // 已取消
+  RESCHEDULED // 已改期
+  DISABLED // 已停用
+}
+
+enum PrepStatus {
+  NONE // 未有內容
+  IN_PROGRESS // 準備中
+  DONE // 已完成
+}
+
+enum TutorPrepStatus {
+  NOT_SENT // 未發送
+  SENT // 已發送
+  CONFIRMED // 已確認
+}
+
+enum MaterialPrepStatus {
+  NO_CONTENT // 未有內容
+  NO_MATERIAL // 未有物資
+  NOT_SENT_SCHOOL // 未送出學校
+  DONE // 已完成
+}
+
+model Lesson {
+  id      String       @id @default(cuid())
+  groupId String
+  date    DateTime     @db.Date
+  startAt DateTime // 上課時間（打卡須早於此時間至少 10 分鐘方獲 100% 薪金）
+  endAt   DateTime
+  status  LessonStatus @default(SCHEDULED)
+
+  coursePrepStatus PrepStatus         @default(NONE) // 課程準備
+  materialStatus   MaterialPrepStatus @default(NO_CONTENT) // 物資狀態
+  tutorPrepStatus  TutorPrepStatus    @default(NOT_SENT) // 導師備課
+
+  // 導師（可空缺）及代課；導師費可逐堂覆寫
+  tutorId           String?
+  substituteTutorId String?
+  tutorFee          Decimal? @db.Decimal(10, 2)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group            Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  tutor            User?             @relation("LessonTutor", fields: [tutorId], references: [id])
+  substitute       User?             @relation("LessonSubstitute", fields: [substituteTutorId], references: [id])
+  checkIns         CheckIn[]
+  jobConfirmations JobConfirmation[]
+
+  @@index([groupId, date])
+  @@index([tutorId, date])
+}
+
+// ===== 導師打卡 =====
+
+model CheckIn {
+  id         String   @id @default(cuid())
+  lessonId   String
+  tutorId    String
+  checkInAt  DateTime  @default(now()) // 上堂時間（打卡）
+  checkOutAt DateTime? // 落堂時間（散場打卡）
+  latitude   Decimal?  @db.Decimal(9, 6)
+  longitude  Decimal?  @db.Decimal(9, 6)
+  // 出糧百分比：提早 >= 10 分鐘打卡 = 100；遲到 = 30（扣 70%）
+  payPercent Int
+  // 該堂實際薪金（打卡時按導師 perLessonRate × payPercent 快照）
+  payAmount  Decimal  @db.Decimal(10, 2)
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  tutor  User   @relation(fields: [tutorId], references: [id])
+
+  @@unique([lessonId, tutorId])
+  @@index([tutorId, checkInAt])
+}
+
+// ===== 導師 Job Confirmation（PDF + 簽名）=====
+
+enum ConfirmationStatus {
+  PENDING // 未簽署
+  SIGNED // 已簽署
+  CONFIRMED // 已確認
+  VOID // 停用
+}
+
+model JobConfirmation {
+  id             String             @id @default(cuid())
+  tutorId        String
+  courseId       String?
+  title          String
+  position       String? // 職位（預設 導師）
+  status         ConfirmationStatus @default(PENDING)
+  tutorFee       Decimal?           @db.Decimal(10, 2) // JC 導師費
+  otherAgreement String? // JC 其他協議
+  // 簽名（data URL，存於資料庫）+ 同意聲明
+  signatureData String?
+  agreed        Boolean   @default(false) // 本人同意接任以上工作安排
+  signedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tutor   User     @relation(fields: [tutorId], references: [id])
+  course  Course?  @relation(fields: [courseId], references: [id])
+  lessons Lesson[] // 此確認書涵蓋的課堂
+
+  @@index([tutorId, status])
+}
+
+// ===== 課程物料準備 status =====
+
+enum MaterialStatus {
+  NOT_PREPARED // 未準備
+  IN_PROGRESS // 準備中
+  PREPARED // 已準備
+}
+
+model MaterialItem {
+  id        String         @id @default(cuid())
+  courseId  String
+  name      String
+  quantity  Int?
+  status    MaterialStatus @default(NOT_PREPARED)
+  notes     String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, status])
+}
