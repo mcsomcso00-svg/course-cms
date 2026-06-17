@@ -70,7 +70,7 @@ export default function LessonForm({
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-sm font-medium">
               日期 <span className="text-rose-500">*</span>
@@ -103,7 +103,7 @@ export default function LessonForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium">課程準備</label>
             <select
@@ -144,7 +144,7 @@ export default function LessonForm({
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium">導師</label>
             <select
@@ -180,7 +180,7 @@ export default function LessonForm({
         {isEdit && (
           <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
             <p className="mb-2 text-sm font-medium">導師打卡時間（可手動修改）</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-gray-500">上堂時間</label>
                 <input
@@ -206,7 +206,7 @@ export default function LessonForm({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium">導師費 (HKD)</label>
             <input

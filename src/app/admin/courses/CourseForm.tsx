@@ -97,7 +97,7 @@ export default function CourseForm({
       <form action={action} className="space-y-5">
         <Section title="基本資料">
           <Text label="課程名稱" name="name" defaultValue={course?.name} required />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Text label="課程代號" name="code" defaultValue={course?.code} />
             <div>
               <label className="mb-1 block text-sm font-medium">狀態</label>
@@ -114,7 +114,7 @@ export default function CourseForm({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium">開始日期</label>
               <input
@@ -134,7 +134,7 @@ export default function CourseForm({
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Text label="費用同單" name="feeNote" defaultValue={course?.feeNote} />
             <div>
               <label className="mb-1 block text-sm font-medium">Invoicing</label>

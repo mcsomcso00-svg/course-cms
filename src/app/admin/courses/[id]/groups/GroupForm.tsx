@@ -83,7 +83,7 @@ export default function GroupForm({
 
         <div>
           <label className="mb-2 block text-sm font-medium">學生年級</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {GRADES.map((g) => (
               <label
                 key={g}
@@ -134,7 +134,7 @@ export default function GroupForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-sm font-medium">開始時間</label>
             <input
@@ -164,7 +164,7 @@ export default function GroupForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium">上堂地點</label>
             <input

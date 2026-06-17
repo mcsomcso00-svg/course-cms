@@ -58,7 +58,7 @@ export default function SchoolForm({
       >
         <Field label="學校名稱" name="name" defaultValue={school?.name} required />
         <Field label="地址" name="address" defaultValue={school?.address} />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium">電話</label>
             <div className="flex gap-2">
@@ -97,7 +97,7 @@ export default function SchoolForm({
           name="contactPerson"
           defaultValue={school?.contactPerson}
         />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
             label="負責人電話"
             name="contactPhone"
@@ -125,7 +125,7 @@ export default function SchoolForm({
           <p className="mb-2 text-xs text-gray-500">
             設定後，導師須在範圍內方可打卡；留空則不限制位置。
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field
               label="學校位置緯度"
               name="latitude"
