@@ -5,7 +5,9 @@
       "PowerShell(winget install Docker.DockerDesktop --accept-source-agreements --accept-package-agreements --silent)",
       "PowerShell(npm install next-auth@beta bcryptjs zod; \\(Get-Content package.json | ConvertFrom-Json\\).dependencies)",
       "PowerShell(npm install -D tsx; $bytes = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Fill\\($bytes\\); [Convert]::ToBase64String\\($bytes\\))",
-      "PowerShell($rng = New-Object Security.Cryptography.RNGCryptoServiceProvider; $bytes = New-Object byte[] 32; $rng.GetBytes\\($bytes\\); [Convert]::ToBase64String\\($bytes\\))"
+      "PowerShell($rng = New-Object Security.Cryptography.RNGCryptoServiceProvider; $bytes = New-Object byte[] 32; $rng.GetBytes\\($bytes\\); [Convert]::ToBase64String\\($bytes\\))",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
