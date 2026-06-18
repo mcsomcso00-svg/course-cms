@@ -76,7 +76,7 @@ export default function SignButton({ jcId }: { jcId: string }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#00000080] p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5">
             <h3 className="mb-3 font-semibold">請在以下方框簽署</h3>
             <canvas
@@ -87,7 +87,7 @@ export default function SignButton({ jcId }: { jcId: string }) {
               onPointerMove={move}
               onPointerUp={up}
               onPointerLeave={up}
-              className="w-full touch-none rounded-lg border border-gray-300 bg-white"
+              className="w-full touch-none rounded-lg border border-gray-300 bg-[#fff]"
               style={{ touchAction: "none" }}
             />
             <label className="mt-3 flex items-center gap-2 text-sm">

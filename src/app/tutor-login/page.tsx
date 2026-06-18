@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import ThemeToggle from "@/components/ThemeToggle";
 import { sendOtp, loginOtp } from "./actions";
 
 const inputCls =
@@ -25,6 +26,7 @@ export default function TutorLoginPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-5">
+      <ThemeToggle className="fixed right-4 top-4" />
       <div className="mb-8 text-center">
         <div className="text-2xl font-black tracking-wide">STARDIAN</div>
         <div className="text-sm tracking-[0.3em] text-gray-500">星佑教育</div>

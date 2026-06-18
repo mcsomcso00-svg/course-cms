@@ -50,7 +50,7 @@ export default function UpdateStatusButton({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#00000080] p-4">
           <form
             action={setMaterialStatusBatch.bind(null, courseId)}
             className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6"

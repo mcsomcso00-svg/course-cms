@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import ThemeToggle from "@/components/ThemeToggle";
 import { logout } from "./actions";
 
 type NavItem = { label: string; href?: string; ready: boolean };
@@ -53,6 +54,9 @@ function UserFooter({ userName }: { userName: string }) {
   return (
     <div className="border-t border-gray-200 p-3">
       <p className="px-3 pb-2 text-xs text-gray-500">{userName}</p>
+      <div className="mb-1 px-1">
+        <ThemeToggle className="w-full text-left" />
+      </div>
       <form action={logout}>
         <button
           type="submit"
@@ -102,7 +106,7 @@ export default function AdminNav({
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-[#00000080]"
             onClick={() => setOpen(false)}
           />
           <div className="absolute left-0 top-0 flex h-full w-64 flex-col bg-white">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const tabs = [
   { href: "/tutor", label: "打卡" },
@@ -35,16 +36,19 @@ export default async function TutorLayout({
             <div className="mt-0.5 text-sm font-semibold">{today}</div>
             <div className="text-xs text-gray-500">{session.user.name}</div>
           </div>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/tutor-login" });
-            }}
-          >
-            <button type="submit" className="text-xs text-gray-400">
-              登出
-            </button>
-          </form>
+          <div className="flex items-center gap-2">
+            <ThemeToggle className="px-2 py-1 text-xs" />
+            <form
+              action={async () => {
+                "use server";
+                await signOut({ redirectTo: "/tutor-login" });
+              }}
+            >
+              <button type="submit" className="text-xs text-gray-400">
+                登出
+              </button>
+            </form>
+          </div>
         </div>
         <nav className="mt-3 flex gap-1 border-b border-gray-200">
           {tabs.map((t) => (

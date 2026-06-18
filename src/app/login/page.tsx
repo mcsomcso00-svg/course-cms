@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import ThemeToggle from "@/components/ThemeToggle";
 import { login } from "./actions";
 
 export default function LoginPage() {
@@ -11,6 +12,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex flex-1 items-center justify-center p-4">
+      <ThemeToggle className="fixed right-4 top-4" />
       <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
         <h1 className="mb-1 text-2xl font-bold tracking-tight">課程管理系統</h1>
         <p className="mb-6 text-sm text-gray-500">請登入以繼續</p>

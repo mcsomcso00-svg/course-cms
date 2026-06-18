@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* 手動深色模式：由 <html class="dark"> 控制 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -8,19 +11,31 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* 深色模式：重新對應色彩變數，整個 app 即時轉色（毋須逐個元件改） */
+.dark {
+  color-scheme: dark;
+
+  --background: #0b0c10;
+  --foreground: #e6e6e9;
+
+  --color-white: #16171c; /* 卡片 / 側欄背景 */
+  --color-black: #ededf0; /* 主要按鈕 / focus ring / text-black */
+
+  --color-gray-50: #0d0e12; /* 頁面背景 */
+  --color-gray-100: #26272e; /* hover 背景 */
+  --color-gray-200: #2b2c34; /* 邊框 */
+  --color-gray-300: #3a3b45; /* 輸入框邊框 */
+  --color-gray-400: #8b8c95;
+  --color-gray-500: #a2a3ac;
+  --color-gray-600: #c5c6ce;
+  --color-gray-700: #d8d9e0;
+  --color-gray-800: #e8e8ee;
+  --color-gray-900: #f2f2f5; /* 卡片上的主要文字 */
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
