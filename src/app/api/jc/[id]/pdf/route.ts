@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ConfirmationStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-const STATUS_LABEL: Record<ConfirmationStatus, string> = {
-  PENDING: "未簽署",
-  SIGNED: "已簽署",
-  CONFIRMED: "已確認",
-  VOID: "停用",
-};
-
+const WD = ["日", "一", "二", "三", "四", "五", "六"];
 function hm(d: Date) {
   return d.toLocaleTimeString("en-GB", {
     hour: "2-digit",
@@ -52,58 +45,184 @@ export async function GET(
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(fontBytes, { subset: true });
 
-  const page = pdf.addPage([595, 842]); // A4
-  const { height } = page.getSize();
-  let y = height - 60;
+  const M = 42; // margin
+  const W = 595;
+  const H = 842;
+  const CW = W - M * 2; // content width
   const ink = rgb(0.1, 0.1, 0.1);
-  const draw = (text: string, size = 12, indent = 50) => {
-    page.drawText(text, { x: indent, y, size, font, color: ink });
-    y -= size + 8;
-  };
 
-  draw("導師工作確認書", 20);
-  y -= 6;
-  draw(`學校：${jc.course?.school.name ?? "—"}`);
-  draw(`課程：${jc.course?.name ?? jc.title}`);
-  draw(`導師：${jc.tutor.name}（${jc.position ?? "導師"}）`);
-  if (jc.tutorFee != null) draw(`導師費：HKD ${Number(jc.tutorFee)}`);
-  y -= 4;
-  draw("課堂：");
-  for (const l of jc.lessons) {
-    const ds = l.date.toISOString().slice(0, 10);
-    draw(`  ${ds}（${l.group.name}） ${hm(l.startAt)}-${hm(l.endAt)}`, 11, 60);
-  }
-  if (jc.otherAgreement) {
-    y -= 4;
-    draw("其他協議：");
-    draw(`  ${jc.otherAgreement}`, 11, 60);
-  }
-  y -= 8;
-  draw(`狀態：${STATUS_LABEL[jc.status]}`);
-  if (jc.agreed) draw("（已同意接任以上工作安排）", 11);
-  if (jc.signedAt)
-    draw(
-      `簽署日期：${jc.signedAt.toLocaleString("zh-HK", {
-        timeZone: "Asia/Hong_Kong",
-      })}`
-    );
-  y -= 6;
-  draw("導師簽署：");
-  if (jc.signatureData?.startsWith("data:image")) {
-    try {
-      const b64 = jc.signatureData.split(",")[1];
-      const png = await pdf.embedPng(Buffer.from(b64, "base64"));
-      page.drawImage(png, { x: 60, y: y - 70, width: 160, height: 80 });
-    } catch {
-      /* 簽名圖片無效則略過 */
+  let page: PDFPage = pdf.addPage([W, H]);
+  let y = H - M;
+
+  function nl(h: number) {
+    y -= h;
+    if (y < M + 20) {
+      page = pdf.addPage([W, H]);
+      y = H - M;
     }
   }
+  function wrap(text: string, size: number, maxW: number): string[] {
+    const lines: string[] = [];
+    let cur = "";
+    for (const ch of text) {
+      if (ch === "\n") {
+        lines.push(cur);
+        cur = "";
+        continue;
+      }
+      if (font.widthOfTextAtSize(cur + ch, size) > maxW && cur) {
+        lines.push(cur);
+        cur = ch;
+      } else cur = cur + ch;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  // 段落（自動換行）
+  function p(
+    text: string,
+    opts: { size?: number; x?: number; lh?: number; f?: PDFFont } = {}
+  ) {
+    const size = opts.size ?? 8.5;
+    const x = opts.x ?? M;
+    const lh = opts.lh ?? size + 3.5;
+    for (const ln of wrap(text, size, M + CW - x)) {
+      page.drawText(ln, { x, y, size, font: opts.f ?? font, color: ink });
+      nl(lh);
+    }
+  }
+  function center(text: string, size: number) {
+    const w = font.widthOfTextAtSize(text, size);
+    page.drawText(text, { x: (W - w) / 2, y, size, font, color: ink });
+    nl(size + 4);
+  }
+  function rule() {
+    page.drawLine({
+      start: { x: M, y: y + 4 },
+      end: { x: M + CW, y: y + 4 },
+      thickness: 0.5,
+      color: rgb(0.8, 0.8, 0.8),
+    });
+  }
+
+  // 由 JC 資料填入
+  const t = jc.tutor;
+  const school = jc.course?.school;
+  const ls = jc.lessons;
+  const fee = jc.tutorFee != null ? Number(jc.tutorFee) : null;
+  const dur =
+    ls.length > 0
+      ? (ls[0].endAt.getTime() - ls[0].startAt.getTime()) / 3600000
+      : null;
+  const hourly = fee != null && dur ? Math.round((fee / dur) * 10) / 10 : null;
+  const schedule =
+    ls.length > 0
+      ? ls
+          .map(
+            (l) =>
+              `${l.date.toISOString().slice(0, 10)}(${WD[l.date.getUTCDay()]}) ${hm(l.startAt)}-${hm(l.endAt)}`
+          )
+          .join("、")
+      : "＿＿＿＿＿＿＿＿＿＿";
+  const hkid4 = t.hkid ? t.hkid.replace(/\s/g, "").slice(0, 4) : "＿＿＿＿";
+  const U = "＿＿＿＿＿＿";
+
+  // ===== 標題 =====
+  center("私人導師服務合約", 16);
+  center("Private Tutor Service Agreement", 10);
+  nl(8);
+  p(`本服務合約由以下雙方於 2026 年 ＿ 月 ＿ 日共同訂立並共同遵守：`, {
+    size: 8.5,
+  });
+  nl(2);
+
+  // ===== 甲乙方 兩欄 =====
+  const colR = M + CW / 2 + 8;
+  const rowH = 14;
+  const headerTop = y;
+  const left = [
+    `甲方 (家長/學生)：${U}`,
+    `香港身份證 (首4位)：＿＿＿＿`,
+    `聯絡電話 / 電郵：${U}`,
+  ];
+  const right = [
+    `乙方 (導師)：${t.name}`,
+    `香港身份證 (首4位)：${hkid4}`,
+    `聯絡電話 / 電郵：${t.phone ?? U}`,
+  ];
+  for (let i = 0; i < 3; i++) {
+    page.drawText(left[i], { x: M, y: headerTop - i * rowH, size: 8.5, font, color: ink });
+    page.drawText(right[i], { x: colR, y: headerTop - i * rowH, size: 8.5, font, color: ink });
+  }
+  y = headerTop - 3 * rowH;
+  nl(6);
+  rule();
+  nl(6);
+
+  // ===== 條款 =====
+  const ST = 9.5; // 標題字
+  p("一、 服務對象、科目與地點", { size: ST });
+  p(`受教學生：姓名 ${U}（年級：＿＿＿），與甲方關係為 ＿＿＿。`);
+  p(`補習科目：${jc.course?.name ?? U}。　授課地點：${school?.name ?? U}${school?.address ? `（${school.address}）` : ""}。`);
+  nl(3);
+
+  p("二、 課時安排與堂費結算", { size: ST });
+  p(`課時安排：每週授課 ＿ 次，每次 ${dur ?? "＿"} 小時。具體上課時間：`);
+  p(schedule);
+  p(`收費標準：每小時港幣 ${hourly ?? "＿＿"} 元正（即每堂費用為港幣 ${fee ?? "＿＿"} 元正）。`);
+  p(`付款方式：[ ] 每堂即時付　[ ] 每月月底結算　[ ] 預付制（每 ＿ 堂預付港幣 ＿＿ 元）。`);
+  p(`付款途徑：[ ] 現金　[ ] 銀行轉賬/轉數快 (FPS) 至賬戶/電話：${U}`);
+  nl(3);
+
+  p("三、 請假、遲到與補課機制", { size: ST });
+  p("1. 常規請假：任何一方取消或更改課堂，必須至少在原定時間 24 小時前 通知對方。若甲方逾期通知或無故缺席，該堂仍須全額支付堂費；若乙方逾期或缺席，須於兩週內免費補回一堂。");
+  p("2. 突發病假：因突發疾病未能上課，須於上課前至少 2 小時 通知，並於事後提供註冊醫生證明（病假紙）。");
+  p("3. 遲到處理：導師遲到須於當日或日後補足時間；學生遲到則按原定時間結束，堂費不予扣減。");
+  nl(3);
+
+  p("四、 香港惡劣天氣安排", { size: ST });
+  p("1. 當香港天文台發出八號或以上熱帶氣旋警告、或黑色暴雨警告時，當日實體面授課自動取消，雙方應另約時間補課，甲方無需就該取消課堂繳費（或雙方同意即時改為網上授課）。");
+  p("2. 若上述信號於上課前 2 小時 或更早時間除下且交通恢復，課堂應照常進行（雙方另有約定除外）。");
+  nl(3);
+
+  p("五、 合約期限、提早終止與私隱保密", { size: ST });
+  p("1. 期限與終止：本合約自簽署日起生效。任何一方欲提早解除合約，須提前 7 天 以書面（含WhatsApp/微信）通知對方。若有嚴重違約或不當言行，另一方有權即時終止合約。");
+  p("2. 私隱保密：雙方承諾嚴格遵守香港法例第486章《個人資料（私隱）條例》，本合約涉及的身份證、住址及電話等個人資料僅用於本服務，未經同意授權不得向任何第三方披露。");
+  p("3. 法律管轄：本合約的訂立、解釋與爭議解決均受香港特別行政區法律管轄。");
+  nl(2);
+  p("法律聲明 (Disclaimer)：本合約為私人服務協議，旨在明確教學約定。本協議並不構成香港法例第57章《僱傭條例》下的正式僱傭關係，乙方（導師）是以獨立承辦商/自僱人士身份提供專業教學服務。", { size: 7.5 });
+  nl(8);
+  rule();
+  nl(10);
+
+  // ===== 簽署欄 =====
+  const sigTop = y;
+  page.drawText("甲方 (家長/學生) 簽署：", { x: M, y: sigTop, size: 8.5, font, color: ink });
+  page.drawText("姓名 (正楷)：＿＿＿＿＿＿", { x: M, y: sigTop - 28, size: 8.5, font, color: ink });
+  page.drawText("日期：2026 年 ＿ 月 ＿ 日", { x: M, y: sigTop - 44, size: 8.5, font, color: ink });
+
+  page.drawText("乙方 (導師) 簽署：", { x: colR, y: sigTop, size: 8.5, font, color: ink });
+  if (jc.signatureData?.startsWith("data:image")) {
+    try {
+      const png = await pdf.embedPng(
+        Buffer.from(jc.signatureData.split(",")[1], "base64")
+      );
+      page.drawImage(png, { x: colR, y: sigTop - 30, width: 110, height: 34 });
+    } catch {
+      /* 略過無效簽名 */
+    }
+  }
+  page.drawText(`姓名 (正楷)：${t.name}`, { x: colR, y: sigTop - 40, size: 8.5, font, color: ink });
+  const signedDate = jc.signedAt
+    ? jc.signedAt.toLocaleDateString("zh-HK", { timeZone: "Asia/Hong_Kong" })
+    : "2026 年 ＿ 月 ＿ 日";
+  page.drawText(`日期：${signedDate}`, { x: colR, y: sigTop - 56, size: 8.5, font, color: ink });
 
   const bytes = await pdf.save();
   return new NextResponse(Buffer.from(bytes), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="JC-${id}.pdf"`,
+      "Content-Disposition": `inline; filename="contract-${id}.pdf"`,
     },
   });
 }
