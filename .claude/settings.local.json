@@ -7,7 +7,9 @@
       "PowerShell(npm install -D tsx; $bytes = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Fill\\($bytes\\); [Convert]::ToBase64String\\($bytes\\))",
       "PowerShell($rng = New-Object Security.Cryptography.RNGCryptoServiceProvider; $bytes = New-Object byte[] 32; $rng.GetBytes\\($bytes\\); [Convert]::ToBase64String\\($bytes\\))",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(npm install *)"
     ]
   }
 }
