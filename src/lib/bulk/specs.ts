@@ -56,6 +56,77 @@ function asEnum(
   return hit ? hit.value : "invalid";
 }
 
+/** 時間 HH:MM；空 → null；非法 → "invalid"。 */
+function asTime(v: unknown): string | null | "invalid" {
+  const t = asStr(v);
+  if (!t) return null;
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return "invalid";
+  const h = +m[1],
+    mi = +m[2];
+  if (h > 23 || mi > 59) return "invalid";
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
+
+/** 規範化日期字串 → "YYYY-MM-DD"；空 → null；非法 → "invalid"。 */
+function asDateStr(v: unknown): string | null | "invalid" {
+  if (v instanceof Date)
+    return `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, "0")}-${String(
+      v.getUTCDate()
+    ).padStart(2, "0")}`;
+  const t = asStr(v);
+  if (!t) return null;
+  const m = t.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (!m) return "invalid";
+  const mm = +m[2],
+    dd = +m[3];
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return "invalid";
+  return `${m[1]}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+}
+
+/** 是 / 否 之類 → boolean。 */
+function asBool(v: unknown): boolean {
+  const t = asStr(v).toLowerCase();
+  return ["1", "是", "y", "yes", "true", "t", "要", "✓", "v"].includes(t);
+}
+
+/** 以 、,，;；/ 或空白分隔的清單。 */
+function asList(v: unknown): string[] {
+  const t = asStr(v);
+  if (!t) return [];
+  return t
+    .split(/[、,，;；/\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+const DOW: Record<string, number> = {
+  一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7,
+};
+
+/** 上課星期：接受 1-7（1=一…7=日）或中文「一二三四五六日」。 */
+function asDays(v: unknown): { days: number[]; bad: string[] } {
+  const days: number[] = [];
+  const bad: string[] = [];
+  for (const tk of asList(v)) {
+    let n: number | undefined;
+    if (/^\d+$/.test(tk)) n = +tk;
+    else n = DOW[tk.replace(/^(星期|週|周|禮拜)/, "")];
+    if (n && n >= 1 && n <= 7) {
+      if (!days.includes(n)) days.push(n);
+    } else bad.push(tk);
+  }
+  return { days, bad };
+}
+
+// 由 date (YYYY-MM-DD) + time (HH:MM) 組成香港時間 DateTime（與課堂表單一致）
+function hkAt(dateStr: string, time: string) {
+  return new Date(`${dateStr}T${time}:00+08:00`);
+}
+function dateOnly(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00.000Z`);
+}
+
 function mkDisplay(columns: Column[], raw: Record<string, unknown>) {
   const d: Record<string, string> = {};
   for (const c of columns) d[c.key] = asStr(raw[c.key]);
@@ -78,6 +149,13 @@ const MATERIAL_STATUS = [
   { value: "NOT_PREPARED", label: "未準備" },
   { value: "IN_PROGRESS", label: "準備中" },
   { value: "PREPARED", label: "已準備" },
+];
+const LESSON_STATUS = [
+  { value: "SCHEDULED", label: "已編排" },
+  { value: "COMPLETED", label: "已完成" },
+  { value: "CANCELLED", label: "已取消" },
+  { value: "RESCHEDULED", label: "已改期" },
+  { value: "DISABLED", label: "已停用" },
 ];
 
 // ===== Spec 介面 =====
@@ -572,15 +650,335 @@ const materialsSpec: ImportSpec = {
 };
 
 // ===================================================================
+// 小組 Groups（以 學年 + 學校 + 課程 對應課程）
+// ===================================================================
+
+const groupsSpec: ImportSpec = {
+  key: "groups",
+  title: "小組",
+  sheetName: "小組",
+  description:
+    "「學年」「學校」「課程名稱」必須對應系統已存在的課程。以 課程+小組名稱 對應既有小組：已存在則更新，否則新增。",
+  columns: [
+    { key: "academicYear", header: "學年", required: true, example: "2025-2026" },
+    { key: "school", header: "學校", required: true, example: "聖瑪利幼稚園" },
+    { key: "course", header: "課程名稱", required: true, example: "STEM 編程班" },
+    { key: "name", header: "小組名稱", required: true, example: "A組" },
+    { key: "studentGrades", header: "學生年級", note: "可多個，用、分隔，例 P1、P2" },
+    { key: "studentCount", header: "學生人數", type: "int", example: "12" },
+    { key: "daysOfWeek", header: "上課星期", note: "1=一 … 7=日，可多個，用、分隔，例 一、三 或 1、3" },
+    { key: "startTime", header: "開始時間", type: "string", example: "09:20" },
+    { key: "endTime", header: "結束時間", type: "string", example: "10:20" },
+    { key: "classLocation", header: "上堂地點" },
+    { key: "materialLocation", header: "物資擺放位置" },
+    { key: "budget", header: "預算" },
+    { key: "requiresTA", header: "需要助教", note: "是 / 否" },
+    { key: "requiresAssistant", header: "需要助理", note: "是 / 否" },
+    { key: "notes", header: "備註" },
+  ],
+  async loadContext() {
+    const [years, schools, courses, groups] = await Promise.all([
+      prisma.academicYear.findMany({ select: { id: true, label: true } }),
+      prisma.school.findMany({ select: { id: true, name: true } }),
+      prisma.course.findMany({
+        select: { id: true, name: true, schoolId: true, academicYearId: true },
+      }),
+      prisma.group.findMany({ select: { id: true, name: true, courseId: true } }),
+    ]);
+    const yearMap = new Map(years.map((y) => [y.label.trim().toLowerCase(), y.id]));
+    const schoolMap = new Map(schools.map((s) => [s.name.trim().toLowerCase(), s.id]));
+    const courseMap = new Map(
+      courses.map((c) => [
+        `${c.academicYearId}|${c.schoolId}|${c.name.trim().toLowerCase()}`,
+        c.id,
+      ])
+    );
+    const groupMap = new Map(
+      groups.map((g) => [`${g.courseId}|${g.name.trim().toLowerCase()}`, g.id])
+    );
+    return { yearMap, schoolMap, courseMap, groupMap };
+  },
+  buildRow(raw, rowNo, ctxU) {
+    const ctx = ctxU as {
+      yearMap: Map<string, string>;
+      schoolMap: Map<string, string>;
+      courseMap: Map<string, string>;
+      groupMap: Map<string, string>;
+    };
+    const messages: string[] = [];
+    const display = mkDisplay(this.columns, raw);
+
+    const yLabel = asStr(raw.academicYear);
+    const yId = yLabel ? ctx.yearMap.get(yLabel.toLowerCase()) ?? null : null;
+    if (!yLabel) messages.push("缺少學年");
+    else if (!yId) messages.push(`學年「${yLabel}」不存在`);
+
+    const schName = asStr(raw.school);
+    const schId = schName ? ctx.schoolMap.get(schName.toLowerCase()) ?? null : null;
+    if (!schName) messages.push("缺少學校");
+    else if (!schId) messages.push(`學校「${schName}」不存在`);
+
+    const courseName = asStr(raw.course);
+    let courseId: string | null = null;
+    if (!courseName) messages.push("缺少課程名稱");
+    else if (yId && schId) {
+      courseId = ctx.courseMap.get(`${yId}|${schId}|${courseName.toLowerCase()}`) ?? null;
+      if (!courseId) messages.push(`課程「${courseName}」在該學年/學校下不存在`);
+    }
+
+    const name = asStr(raw.name);
+    if (!name) messages.push("缺少小組名稱");
+
+    const count = asNum(raw.studentCount);
+    if (Number.isNaN(count)) messages.push("學生人數不是數字");
+    const st = asTime(raw.startTime);
+    if (st === "invalid") messages.push("開始時間格式錯誤（HH:MM）");
+    const et = asTime(raw.endTime);
+    if (et === "invalid") messages.push("結束時間格式錯誤（HH:MM）");
+    const { days, bad } = asDays(raw.daysOfWeek);
+    if (bad.length) messages.push(`上課星期無法辨識：${bad.join("、")}`);
+
+    const matchId =
+      courseId && name
+        ? ctx.groupMap.get(`${courseId}|${name.toLowerCase()}`) ?? null
+        : null;
+    const ok = messages.length === 0;
+    const data = ok
+      ? {
+          courseId: courseId!,
+          name,
+          studentGrades: asList(raw.studentGrades),
+          studentCount: count == null ? null : Math.round(count),
+          daysOfWeek: days,
+          startTime: st === "invalid" ? null : st,
+          endTime: et === "invalid" ? null : et,
+          classLocation: asStr(raw.classLocation) || null,
+          materialLocation: asStr(raw.materialLocation) || null,
+          budget: asStr(raw.budget) || null,
+          requiresTA: asBool(raw.requiresTA),
+          requiresAssistant: asBool(raw.requiresAssistant),
+          notes: asStr(raw.notes) || null,
+        }
+      : null;
+    return {
+      rowNo,
+      status: ok ? (matchId ? "update" : "new") : "error",
+      messages,
+      display,
+      data,
+      matchId,
+      dupKey: courseId && name ? `group:${courseId}|${name.toLowerCase()}` : null,
+    };
+  },
+  async commit(rows) {
+    let created = 0,
+      updated = 0;
+    await prisma.$transaction(async (tx) => {
+      for (const r of writable(rows)) {
+        const data = r.data as Prisma.GroupUncheckedCreateInput;
+        if (r.status === "update" && r.matchId) {
+          await tx.group.update({ where: { id: r.matchId }, data });
+          updated++;
+        } else {
+          await tx.group.create({ data });
+          created++;
+        }
+      }
+    });
+    return { created, updated, revalidate: ["/admin"] };
+  },
+};
+
+// ===================================================================
+// 課堂 Lessons（以 學年 + 學校 + 課程 + 小組 對應小組；導師以電話對應）
+// ===================================================================
+
+const lessonsSpec: ImportSpec = {
+  key: "lessons",
+  title: "課堂",
+  sheetName: "課堂",
+  description:
+    "「學年/學校/課程/小組」必須對應已存在的小組；導師 / 代課以「電話」對應已存在導師。以 小組+日期 對應既有課堂：已存在則更新，否則新增。",
+  columns: [
+    { key: "academicYear", header: "學年", required: true, example: "2025-2026" },
+    { key: "school", header: "學校", required: true, example: "聖瑪利幼稚園" },
+    { key: "course", header: "課程名稱", required: true, example: "STEM 編程班" },
+    { key: "group", header: "小組名稱", required: true, example: "A組" },
+    { key: "date", header: "日期", required: true, type: "date", example: "2025-09-01" },
+    { key: "startTime", header: "開始時間", required: true, type: "string", example: "09:20" },
+    { key: "endTime", header: "結束時間", required: true, type: "string", example: "10:20" },
+    { key: "status", header: "狀態", type: "enum", options: LESSON_STATUS, note: "預設「已編排」" },
+    { key: "tutorPhone", header: "導師電話", type: "string", note: "對應已存在導師的電話；留空＝未指派" },
+    { key: "substitutePhone", header: "代課導師電話", type: "string" },
+    { key: "tutorFee", header: "逐堂導師費(HKD)", type: "number", note: "留空則沿用課堂預設" },
+    { key: "notes", header: "備註" },
+  ],
+  async loadContext() {
+    const [years, schools, courses, groups, tutors, lessons] = await Promise.all([
+      prisma.academicYear.findMany({ select: { id: true, label: true } }),
+      prisma.school.findMany({ select: { id: true, name: true } }),
+      prisma.course.findMany({
+        select: { id: true, name: true, schoolId: true, academicYearId: true },
+      }),
+      prisma.group.findMany({ select: { id: true, name: true, courseId: true } }),
+      prisma.user.findMany({
+        where: { role: "TUTOR" },
+        select: { id: true, phone: true },
+      }),
+      prisma.lesson.findMany({ select: { id: true, groupId: true, date: true } }),
+    ]);
+    const yearMap = new Map(years.map((y) => [y.label.trim().toLowerCase(), y.id]));
+    const schoolMap = new Map(schools.map((s) => [s.name.trim().toLowerCase(), s.id]));
+    const courseMap = new Map(
+      courses.map((c) => [
+        `${c.academicYearId}|${c.schoolId}|${c.name.trim().toLowerCase()}`,
+        c.id,
+      ])
+    );
+    const groupMap = new Map(
+      groups.map((g) => [`${g.courseId}|${g.name.trim().toLowerCase()}`, g.id])
+    );
+    const tutorMap = new Map<string, string>();
+    for (const t of tutors) if (t.phone) tutorMap.set(t.phone.trim(), t.id);
+    const lessonMap = new Map(
+      lessons.map((l) => [
+        `${l.groupId}|${l.date.toISOString().slice(0, 10)}`,
+        l.id,
+      ])
+    );
+    return { yearMap, schoolMap, courseMap, groupMap, tutorMap, lessonMap };
+  },
+  buildRow(raw, rowNo, ctxU) {
+    const ctx = ctxU as {
+      yearMap: Map<string, string>;
+      schoolMap: Map<string, string>;
+      courseMap: Map<string, string>;
+      groupMap: Map<string, string>;
+      tutorMap: Map<string, string>;
+      lessonMap: Map<string, string>;
+    };
+    const messages: string[] = [];
+    const display = mkDisplay(this.columns, raw);
+
+    const yLabel = asStr(raw.academicYear);
+    const yId = yLabel ? ctx.yearMap.get(yLabel.toLowerCase()) ?? null : null;
+    if (!yLabel) messages.push("缺少學年");
+    else if (!yId) messages.push(`學年「${yLabel}」不存在`);
+
+    const schName = asStr(raw.school);
+    const schId = schName ? ctx.schoolMap.get(schName.toLowerCase()) ?? null : null;
+    if (!schName) messages.push("缺少學校");
+    else if (!schId) messages.push(`學校「${schName}」不存在`);
+
+    const courseName = asStr(raw.course);
+    let courseId: string | null = null;
+    if (!courseName) messages.push("缺少課程名稱");
+    else if (yId && schId) {
+      courseId = ctx.courseMap.get(`${yId}|${schId}|${courseName.toLowerCase()}`) ?? null;
+      if (!courseId) messages.push(`課程「${courseName}」在該學年/學校下不存在`);
+    }
+
+    const groupName = asStr(raw.group);
+    let groupId: string | null = null;
+    if (!groupName) messages.push("缺少小組名稱");
+    else if (courseId) {
+      groupId = ctx.groupMap.get(`${courseId}|${groupName.toLowerCase()}`) ?? null;
+      if (!groupId) messages.push(`小組「${groupName}」在該課程下不存在`);
+    }
+
+    const dateStr = asDateStr(raw.date);
+    if (dateStr === null) messages.push("缺少日期");
+    else if (dateStr === "invalid") messages.push("日期格式錯誤（YYYY-MM-DD）");
+    const st = asTime(raw.startTime);
+    if (st === null) messages.push("缺少開始時間");
+    else if (st === "invalid") messages.push("開始時間格式錯誤（HH:MM）");
+    const et = asTime(raw.endTime);
+    if (et === null) messages.push("缺少結束時間");
+    else if (et === "invalid") messages.push("結束時間格式錯誤（HH:MM）");
+
+    const status = asEnum(raw.status, LESSON_STATUS);
+    if (status === "invalid") messages.push("狀態不在可選值內");
+    const fee = asNum(raw.tutorFee);
+    if (Number.isNaN(fee)) messages.push("逐堂導師費不是數字");
+
+    const tutorPhone = asStr(raw.tutorPhone);
+    let tutorId: string | null = null;
+    if (tutorPhone) {
+      tutorId = ctx.tutorMap.get(tutorPhone) ?? null;
+      if (!tutorId) messages.push(`導師電話「${tutorPhone}」找不到對應導師`);
+    }
+    const subPhone = asStr(raw.substitutePhone);
+    let subId: string | null = null;
+    if (subPhone) {
+      subId = ctx.tutorMap.get(subPhone) ?? null;
+      if (!subId) messages.push(`代課導師電話「${subPhone}」找不到對應導師`);
+    }
+
+    const ok = messages.length === 0;
+    const ds = typeof dateStr === "string" ? dateStr : "";
+    const matchId =
+      ok && groupId ? ctx.lessonMap.get(`${groupId}|${ds}`) ?? null : null;
+    const data = ok
+      ? {
+          groupId: groupId!,
+          date: dateOnly(ds),
+          startAt: hkAt(ds, st as string),
+          endAt: hkAt(ds, et as string),
+          status: (status ?? "SCHEDULED") as string,
+          tutorId,
+          substituteTutorId: subId,
+          tutorFee: fee,
+          notes: asStr(raw.notes) || null,
+        }
+      : null;
+    return {
+      rowNo,
+      status: ok ? (matchId ? "update" : "new") : "error",
+      messages,
+      display,
+      data,
+      matchId,
+      dupKey: ok && groupId ? `lesson:${groupId}|${ds}` : null,
+    };
+  },
+  async commit(rows) {
+    let created = 0,
+      updated = 0;
+    await prisma.$transaction(async (tx) => {
+      for (const r of writable(rows)) {
+        const data = r.data as Prisma.LessonUncheckedCreateInput;
+        if (r.status === "update" && r.matchId) {
+          await tx.lesson.update({ where: { id: r.matchId }, data });
+          updated++;
+        } else {
+          await tx.lesson.create({ data });
+          created++;
+        }
+      }
+    });
+    return { created, updated, revalidate: ["/admin"] };
+  },
+};
+
+// ===================================================================
 
 export const SPECS: Record<string, ImportSpec> = {
   schools: schoolsSpec,
   tutors: tutorsSpec,
   courses: coursesSpec,
+  groups: groupsSpec,
+  lessons: lessonsSpec,
   materials: materialsSpec,
 };
 
-export const SECTION_ORDER = ["schools", "tutors", "courses", "materials"];
+export const SECTION_ORDER = [
+  "schools",
+  "tutors",
+  "courses",
+  "groups",
+  "lessons",
+  "materials",
+];
 
 export function getSpec(section: string): ImportSpec | null {
   return SPECS[section] ?? null;
