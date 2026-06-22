@@ -130,6 +130,12 @@ export default async function TutorsPage({
             </button>
           </form>
           <Link
+            href="/admin/import/tutors"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          >
+            ⬆ 批量匯入
+          </Link>
+          <Link
             href="/admin/tutors/new"
             className="rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
           >

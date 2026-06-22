@@ -111,12 +111,20 @@ export default async function AdminHome({
       {/* 頂部：標題 + 搜尋 + 新增學校 */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold tracking-tight">學校與課程</h1>
-        <Link
-          href="/admin/schools/new"
-          className="rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
-        >
-          + 新增學校
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/import"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          >
+            ⬆ 批量匯入
+          </Link>
+          <Link
+            href="/admin/schools/new"
+            className="rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
+          >
+            + 新增學校
+          </Link>
+        </div>
       </div>
 
       {/* 學年分頁（保留現有篩選） */}

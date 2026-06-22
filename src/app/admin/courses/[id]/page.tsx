@@ -127,7 +127,17 @@ export default async function CourseDetailPage({
         </Card>
 
         {/* 課程物料 */}
-        <Card title="課程物料">
+        <Card
+          title="課程物料"
+          action={
+            <Link
+              href="/admin/import/materials"
+              className="rounded-md border border-gray-300 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+            >
+              ⬆ 批量匯入
+            </Link>
+          }
+        >
           {course.materials.length === 0 ? (
             <p className="mb-3 text-sm text-gray-400">尚未加入物料。</p>
           ) : (
@@ -230,12 +240,20 @@ export default async function CourseDetailPage({
         <Card
           title="小組"
           action={
-            <Link
-              href={`/admin/courses/${id}/groups/new`}
-              className="rounded-md bg-black px-2.5 py-1 text-xs font-medium text-white hover:bg-gray-800"
-            >
-              + 新增小組
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/admin/import/groups"
+                className="rounded-md border border-gray-300 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+              >
+                ⬆ 批量匯入
+              </Link>
+              <Link
+                href={`/admin/courses/${id}/groups/new`}
+                className="rounded-md bg-black px-2.5 py-1 text-xs font-medium text-white hover:bg-gray-800"
+              >
+                + 新增小組
+              </Link>
+            </div>
           }
         >
           {course.groups.length === 0 ? (

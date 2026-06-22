@@ -169,6 +169,12 @@ export default async function LessonsPage({
         )}
         <div className="flex-1" />
         <Link
+          href="/admin/import/lessons"
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-100"
+        >
+          ⬆ 批量匯入
+        </Link>
+        <Link
           href={`/admin/courses/${id}/lessons/new`}
           className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-100"
         >
