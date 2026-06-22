@@ -13,6 +13,7 @@ const nav: { label: string; href?: string; ready: boolean }[] = [
   { label: "糧單", href: "/admin/payroll", ready: true },
   { label: "用戶", href: "/admin/users", ready: true },
   { label: "導師", href: "/admin/tutors", ready: true },
+  { label: "批量匯入", href: "/admin/import", ready: true },
 ];
 
 export default async function AdminLayout({
